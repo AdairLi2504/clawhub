@@ -132,6 +132,7 @@ export const searchSkills: ReturnType<typeof action> = action({
     const maxCandidate = Math.min(Math.max(limit * 10, 200), 256)
     let candidateLimit = Math.min(Math.max(limit * 3, 50), 256)
     let hydrated: SkillSearchEntry[] = []
+    const seenEmbeddingIds = new Set<Id<'skillEmbeddings'>>()
     let scoreById = new Map<Id<'skillEmbeddings'>, number>()
     let exactMatches: SkillSearchEntry[] = []
 
@@ -143,10 +144,12 @@ export const searchSkills: ReturnType<typeof action> = action({
       })
 
       // Only hydrate embedding IDs we haven't seen yet (incremental).
-      const previousIds = new Set(hydrated.map((e) => e.embeddingId))
+      // Track all attempted IDs, not just successful hydrations, to avoid
+      // re-hydrating filtered-out entries (soft-deleted, suspicious) each loop.
       const newEmbeddingIds = results
         .map((r) => r._id)
-        .filter((id) => !previousIds.has(id))
+        .filter((id) => !seenEmbeddingIds.has(id))
+      for (const id of newEmbeddingIds) seenEmbeddingIds.add(id)
 
       if (newEmbeddingIds.length > 0) {
         const newEntries = (await ctx.runQuery(internal.search.hydrateResults, {
