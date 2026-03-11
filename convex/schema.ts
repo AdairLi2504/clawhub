@@ -462,7 +462,9 @@ const skillSearchDigest = defineTable({
   isSuspicious: v.optional(v.boolean()),
   createdAt: v.number(),
   updatedAt: v.number(),
-}).index('by_skill', ['skillId'])
+})
+  .index('by_skill', ['skillId'])
+  .index('by_active_updated', ['softDeletedAt', 'updatedAt'])
 
 const skillDailyStats = defineTable({
   skillId: v.id('skills'),
