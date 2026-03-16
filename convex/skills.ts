@@ -2684,11 +2684,11 @@ export const listPublicPageV2 = query({
     // Build response directly from digest — no extra table reads.
     // This keeps the query's read set to skillSearchDigest only, so writes
     // to skills/users/skillVersions never invalidate the cache.
-    const filteredIds = new Set(filteredPage.map((s) => s._id))
+    const filteredMap = new Map(filteredPage.map((s) => [s._id, s]))
     const items: PublicSkillEntry[] = []
     for (const digest of result.page) {
-      if (!filteredIds.has(digest.skillId)) continue
-      const hydratable = digestToHydratableSkill(digest)
+      const hydratable = filteredMap.get(digest.skillId)
+      if (!hydratable) continue
       const publicSkill = toPublicSkill(hydratable)
       if (!publicSkill) continue
       const ownerInfo = digestToOwnerInfo(digest)
