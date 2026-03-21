@@ -115,6 +115,7 @@ export async function fetchPackages(params: {
         ? ApiRoutes.bundlePlugins
         : ApiRoutes.packages;
   const url = packageApiUrl(route);
+  if (params.family === "skill") url.searchParams.set("family", "skill");
   if (typeof params.limit === "number") url.searchParams.set("limit", String(params.limit));
   if (typeof params.isOfficial === "boolean") {
     url.searchParams.set("isOfficial", String(params.isOfficial));

@@ -106,6 +106,21 @@ describe("package commands", () => {
     expect(url.searchParams.get("executesCode")).toBe("true");
   });
 
+  it("preserves --family skill on non-search package listings", async () => {
+    mockApiRequest.mockResolvedValueOnce({
+      items: [],
+      nextCursor: null,
+    });
+
+    await cmdExplorePackages(makeOpts(), "", { family: "skill", limit: 7 });
+
+    const request = mockApiRequest.mock.calls[0]?.[1] as { url?: string } | undefined;
+    const url = new URL(String(request?.url));
+    expect(url.pathname).toBe("/api/v1/packages");
+    expect(url.searchParams.get("family")).toBe("skill");
+    expect(url.searchParams.get("limit")).toBe("7");
+  });
+
   it("uses tag param when fetching a package file", async () => {
     mockApiRequest
       .mockResolvedValueOnce({

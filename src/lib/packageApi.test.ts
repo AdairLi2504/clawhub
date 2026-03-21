@@ -38,6 +38,27 @@ describe("fetchPackages", () => {
     expect(url.searchParams.get("isOfficial")).toBe("true");
   });
 
+  it("preserves family=skill when listing without a search query", async () => {
+    vi.stubEnv("VITE_CONVEX_URL", "https://registry.example");
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(JSON.stringify({ items: [], nextCursor: null }), { status: 200 }));
+
+    await fetchPackages({
+      family: "skill",
+      limit: 12,
+    });
+
+    const requestUrl = fetchMock.mock.calls[0]?.[0];
+    if (typeof requestUrl !== "string") {
+      throw new Error("Expected fetch to be called with a string URL");
+    }
+    const url = new URL(requestUrl);
+    expect(url.pathname).toBe("/api/v1/packages");
+    expect(url.searchParams.get("family")).toBe("skill");
+    expect(url.searchParams.get("limit")).toBe("12");
+  });
+
   it("falls back across supported README variants", async () => {
     vi.stubEnv("VITE_CONVEX_URL", "https://registry.example");
     const fetchMock = vi

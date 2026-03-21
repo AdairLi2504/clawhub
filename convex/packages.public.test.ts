@@ -373,6 +373,50 @@ describe("packages public queries", () => {
     expect(result.page.map((entry) => entry.name)).toEqual(["official-demo"]);
   });
 
+  it("keeps scanning official-only listings without a family filter", async () => {
+    const { ctx } = makeDigestCtx({
+      pages: [
+        {
+          page: [makeDigest("noise-1", { isOfficial: false })],
+          isDone: false,
+          continueCursor: "cursor:1",
+        },
+        {
+          page: [makeDigest("noise-2", { isOfficial: false })],
+          isDone: false,
+          continueCursor: "cursor:2",
+        },
+        {
+          page: [makeDigest("noise-3", { isOfficial: false })],
+          isDone: false,
+          continueCursor: "cursor:3",
+        },
+        {
+          page: [makeDigest("noise-4", { isOfficial: false })],
+          isDone: false,
+          continueCursor: "cursor:4",
+        },
+        {
+          page: [makeDigest("noise-5", { isOfficial: false })],
+          isDone: false,
+          continueCursor: "cursor:5",
+        },
+        {
+          page: [makeDigest("official-late", { isOfficial: true, updatedAt: 10 })],
+          isDone: true,
+          continueCursor: "",
+        },
+      ],
+    });
+
+    const result = await listPublicPageHandler(ctx, {
+      isOfficial: true,
+      paginationOpts: { cursor: null, numItems: 1 },
+    });
+
+    expect(result.page.map((entry) => entry.name)).toEqual(["official-late"]);
+  });
+
   it("filters private packages and capability flags in public search", async () => {
     const { ctx } = makeDigestCtx({
       pages: [

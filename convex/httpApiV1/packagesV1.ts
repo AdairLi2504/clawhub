@@ -158,18 +158,25 @@ async function listPackages(ctx: ActionCtx, request: Request, family?: PackageLi
   const rate = await applyRateLimit(ctx, request, "read");
   if (!rate.ok) return rate.response;
 
-  const limit = Math.max(1, Math.min(toOptionalNumber(new URL(request.url).searchParams.get("limit")) ?? 25, 100));
-  const cursor = new URL(request.url).searchParams.get("cursor");
-  const channelRaw = new URL(request.url).searchParams.get("channel")?.trim();
-  const capabilityTag = new URL(request.url).searchParams.get("capabilityTag")?.trim() || undefined;
-  const isOfficialRaw = new URL(request.url).searchParams.get("isOfficial");
-  const executesCodeRaw = new URL(request.url).searchParams.get("executesCode");
+  const url = new URL(request.url);
+  const limit = Math.max(1, Math.min(toOptionalNumber(url.searchParams.get("limit")) ?? 25, 100));
+  const cursor = url.searchParams.get("cursor");
+  const familyRaw = url.searchParams.get("family");
+  const channelRaw = url.searchParams.get("channel")?.trim();
+  const capabilityTag = url.searchParams.get("capabilityTag")?.trim() || undefined;
+  const isOfficialRaw = url.searchParams.get("isOfficial");
+  const executesCodeRaw = url.searchParams.get("executesCode");
+  const effectiveFamily =
+    family ??
+    (familyRaw === "skill" || familyRaw === "code-plugin" || familyRaw === "bundle-plugin"
+      ? familyRaw
+      : undefined);
   const result = await runQueryRef<{
     page: unknown[];
     isDone: boolean;
     continueCursor: string | null;
   }>(ctx, apiRefs.packages.listPublicPage, {
-    family,
+    family: effectiveFamily,
     channel:
       channelRaw === "official" || channelRaw === "community" || channelRaw === "private"
         ? channelRaw

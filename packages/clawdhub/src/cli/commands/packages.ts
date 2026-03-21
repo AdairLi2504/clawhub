@@ -124,6 +124,7 @@ export async function cmdExplorePackages(
           ? ApiRoutes.bundlePlugins
           : ApiRoutes.packages;
     const url = registryUrl(route, registry);
+    if (options.family === "skill") url.searchParams.set("family", "skill");
     url.searchParams.set("limit", String(limit));
     if (options.official) url.searchParams.set("isOfficial", "true");
     if (typeof options.executesCode === "boolean") {

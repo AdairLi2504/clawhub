@@ -22,6 +22,7 @@ import { toPublicUser } from "./lib/public";
 import { hashSkillFiles } from "./lib/skills";
 
 const MAX_PACKAGE_BYTES = 50 * 1024 * 1024;
+const MAX_PUBLIC_LIST_SCAN_PAGES = 200;
 const MAX_SEARCH_PAGE_SIZE = 200;
 const MAX_SEARCH_SCAN_PAGES = 200;
 const apiRefs = api as unknown as {
@@ -346,7 +347,7 @@ export const listPublicPage = query({
       if (next) collected.push(next);
     }
 
-    while (!done && collected.length < targetCount && loops < 5) {
+    while (!done && collected.length < targetCount && loops < MAX_PUBLIC_LIST_SCAN_PAGES) {
       loops += 1;
       const pageSize = Math.max(targetCount * 3, targetCount);
       const builder = buildPackageDigestQuery(ctx, { family, channel, isOfficial });
