@@ -91,6 +91,9 @@ function PublishPluginRoute() {
         <p className="section-subtitle" style={{ marginBottom: 0 }}>
           Upload a native code plugin or bundle plugin release.
         </p>
+        <p className="section-subtitle" style={{ marginBottom: 0 }}>
+          New releases stay private until automated security checks and verification finish.
+        </p>
       </header>
       <div className="card" style={{ display: "grid", gap: 12 }}>
         {!isAuthenticated ? <div>Log in to publish plugins.</div> : null}
@@ -231,7 +234,7 @@ function PublishPluginRoute() {
                       files: uploaded,
                     },
                   });
-                  setStatus("Published.");
+                  setStatus("Published. Pending security checks and verification before public listing.");
                 } catch (publishError) {
                   setError(formatPublishError(publishError));
                   setStatus(null);

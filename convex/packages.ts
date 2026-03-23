@@ -44,9 +44,11 @@ const internalRefs = internal as unknown as {
     evaluatePackageReleaseWithLlm: unknown;
   };
   packages: {
+    backfillPackageReleaseScansInternal: unknown;
     insertReleaseInternal: unknown;
     getByNameForViewerInternal: unknown;
     getPackageByIdInternal: unknown;
+    getPackageReleaseScanBackfillBatchInternal: unknown;
     listVersionsForViewerInternal: unknown;
     getVersionByNameForViewerInternal: unknown;
     publishPackageForUserInternal: unknown;
@@ -988,6 +990,50 @@ export const getReleasesByIdsInternal = internalQuery({
   },
 });
 
+export const getPackageReleaseScanBackfillBatchInternal = internalQuery({
+  args: {
+    cursor: v.optional(v.number()),
+    batchSize: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const batchSize = Math.max(1, Math.min(args.batchSize ?? 50, 200));
+    const cursor = args.cursor ?? 0;
+
+    const releases = await ctx.db
+      .query("packageReleases")
+      .withIndex("by_creation_time", (q) => q.gt("_creationTime", cursor))
+      .order("asc")
+      .take(batchSize * 3);
+
+    const results: Array<{ releaseId: Id<"packageReleases">; packageId: Id<"packages"> }> = [];
+    let nextCursor = cursor;
+
+    for (const release of releases) {
+      nextCursor = release._creationTime;
+      if (results.length >= batchSize) break;
+      if (release.softDeletedAt) continue;
+
+      const pkg = await ctx.db.get(release.packageId);
+      if (!pkg || pkg.softDeletedAt || pkg.family === "skill") continue;
+
+      const needsVt = !release.sha256hash || !release.vtAnalysis;
+      const needsLlm = !release.llmAnalysis || release.llmAnalysis.status === "error";
+      if (!needsVt && !needsLlm) continue;
+
+      results.push({
+        releaseId: release._id,
+        packageId: release.packageId,
+      });
+    }
+
+    return {
+      releases: results,
+      nextCursor,
+      done: releases.length < batchSize * 3,
+    };
+  },
+});
+
 async function publishPackageImpl(
   ctx: Parameters<typeof requireGitHubAccountAge>[0] & Pick<ActionCtx, "storage" | "scheduler">,
   userId: Id<"users">,
@@ -1455,5 +1501,60 @@ export const updateReleaseLlmAnalysisInternal = internalMutation({
     const release = await ctx.db.get(args.releaseId);
     if (!isReleaseActive(release)) return;
     await ctx.db.patch(args.releaseId, { llmAnalysis: args.llmAnalysis });
+  },
+});
+
+export const backfillPackageReleaseScansInternal = internalAction({
+  args: {
+    cursor: v.optional(v.number()),
+    batchSize: v.optional(v.number()),
+    scheduled: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const batchSize = Math.max(1, Math.min(args.batchSize ?? 50, 200));
+    const batch = (await ctx.runQuery(internalRefs.packages.getPackageReleaseScanBackfillBatchInternal as never, {
+      cursor: args.cursor,
+      batchSize,
+    })) as {
+      releases: Array<{ releaseId: Id<"packageReleases"> }>;
+      nextCursor: number;
+      done: boolean;
+    };
+
+    let scheduled = args.scheduled ?? 0;
+    for (const release of batch.releases) {
+      await ctx.scheduler.runAfter(0, internalRefs.vt.scanPackageReleaseWithVirusTotal as never, {
+        releaseId: release.releaseId,
+      });
+      await ctx.scheduler.runAfter(0, internalRefs.llmEval.evaluatePackageReleaseWithLlm as never, {
+        releaseId: release.releaseId,
+      });
+      scheduled += 1;
+    }
+
+    if (!batch.done) {
+      await ctx.scheduler.runAfter(0, internalRefs.packages.backfillPackageReleaseScansInternal as never, {
+        cursor: batch.nextCursor,
+        batchSize,
+        scheduled,
+      });
+    }
+
+    return {
+      scheduled,
+      nextCursor: batch.nextCursor,
+      done: batch.done,
+    };
+  },
+});
+
+export const backfillPackageReleaseScans = action({
+  args: {
+    batchSize: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.runAction(internalRefs.packages.backfillPackageReleaseScansInternal as never, {
+      batchSize: args.batchSize,
+    });
   },
 });

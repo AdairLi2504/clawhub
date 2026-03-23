@@ -33,9 +33,14 @@ function Dashboard() {
   return (
     <main className="section">
       <div className="dashboard-header">
-        <h1 className="section-title" style={{ margin: 0 }}>
-          My Skills
-        </h1>
+        <div style={{ display: "grid", gap: "6px" }}>
+          <h1 className="section-title" style={{ margin: 0 }}>
+            My Skills
+          </h1>
+          <p className="section-subtitle" style={{ margin: 0 }}>
+            New skill versions stay private until automated security checks and verification finish.
+          </p>
+        </div>
         <Link to="/upload" search={{ updateSlug: undefined }} className="btn btn-primary">
           <Plus className="h-4 w-4" aria-hidden="true" />
           Upload New Skill
@@ -79,11 +84,16 @@ function SkillCard({ skill, ownerHandle }: { skill: DashboardSkill; ownerHandle:
           {skill.pendingReview ? (
             <span className="tag tag-pending">
               <Clock className="h-3 w-3" aria-hidden="true" />
-              Scanning
+              Pending checks
             </span>
           ) : null}
         </div>
         {skill.summary && <p className="dashboard-skill-description">{skill.summary}</p>}
+        {skill.pendingReview ? (
+          <p className="dashboard-skill-description">
+            Hidden until VirusTotal and verification checks finish.
+          </p>
+        ) : null}
         <div className="dashboard-skill-stats">
           <span>
             <Package size={13} aria-hidden="true" /> {formatCompactStat(skill.stats.downloads)}

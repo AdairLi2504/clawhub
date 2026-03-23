@@ -333,4 +333,43 @@ describe("plugins publish route", () => {
     expect(screen.getByRole("button", { name: "Publish" }).getAttribute("disabled")).not.toBeNull();
     expect(publishRelease).not.toHaveBeenCalled();
   });
+
+  it("shows pending verification messaging after plugin publish", async () => {
+    renderPublishRoute();
+
+    const packageJson = withRelativePath(
+      new File([JSON.stringify({ name: "demo-plugin", version: "1.0.0" })], "package.json", {
+        type: "application/json",
+      }),
+      "demo-plugin/package.json",
+    );
+    const manifest = withRelativePath(
+      new File(['{"id":"demo.plugin"}'], "openclaw.plugin.json", { type: "application/json" }),
+      "demo-plugin/openclaw.plugin.json",
+    );
+    const dist = withRelativePath(
+      new File(["export const demo = true;\n"], "index.js", { type: "text/javascript" }),
+      "demo-plugin/dist/index.js",
+    );
+
+    fireEvent.change(getFileInput(), { target: { files: [packageJson, manifest, dist] } });
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("demo-plugin")).toBeTruthy();
+    });
+    fireEvent.change(screen.getByPlaceholderText("Changelog"), {
+      target: { value: "Initial release" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Source repo (owner/repo)"), {
+      target: { value: "openclaw/demo-plugin" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Source commit"), {
+      target: { value: "abc123" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+
+    expect(
+      await screen.findByText(/Pending security checks and verification before public listing\./i),
+    ).toBeTruthy();
+  });
 });
