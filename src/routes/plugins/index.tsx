@@ -131,6 +131,7 @@ export function PluginsIndex() {
                   search: (prev) => ({
                     ...prev,
                     cursor: undefined,
+                    q: query.trim() || undefined,
                     family: value || undefined,
                   }),
                 });
@@ -149,6 +150,7 @@ export function PluginsIndex() {
                     search: (prev) => ({
                       ...prev,
                       cursor: undefined,
+                      q: query.trim() || undefined,
                       verified: event.target.checked || undefined,
                     }),
                   });
@@ -165,6 +167,7 @@ export function PluginsIndex() {
                     search: (prev) => ({
                       ...prev,
                       cursor: undefined,
+                      q: query.trim() || undefined,
                       executesCode: event.target.checked || undefined,
                     }),
                   });
