@@ -382,6 +382,112 @@ describe("ensureHandler", () => {
     });
   });
 
+  it("repairs an existing handle that is no longer claimable", async () => {
+    const { ctx, patch, query } = makeCtx();
+    query.mockImplementation(((table: string) => {
+      if (table === "reservedHandles") {
+        return {
+          withIndex: (name: string) => {
+            if (name !== "by_handle_active_updatedAt") {
+              throw new Error(`Unexpected reservedHandles index ${name}`);
+            }
+            return { order: () => ({ take: async () => [] }) };
+          },
+        };
+      }
+      if (table === "publishers") {
+        return {
+          withIndex: (name: string, builder?: (q: { eq: (field: string, value: string) => unknown }) => unknown) => {
+            let handle = "";
+            let linkedUserId = "";
+            const q = {
+              eq: (field: string, value: string) => {
+                if (field === "handle") handle = value;
+                if (field === "linkedUserId") linkedUserId = value;
+                return q;
+              },
+            };
+            builder?.(q);
+            if (name === "by_handle") {
+              return {
+                unique: vi.fn(async () => {
+                  if (handle === "openclaw") {
+                    return {
+                      _id: "publishers:openclaw",
+                      kind: "org",
+                      handle: "openclaw",
+                      displayName: "OpenClaw",
+                    };
+                  }
+                  return null;
+                }),
+              };
+            }
+            if (name === "by_linked_user") {
+              return {
+                unique: vi.fn(async () =>
+                  linkedUserId === "users:owner"
+                    ? {
+                        _id: "publishers:openclaw-user",
+                        kind: "user",
+                        handle: "openclaw-user",
+                        linkedUserId: "users:owner",
+                        displayName: "OpenClaw User",
+                      }
+                    : null,
+                ),
+              };
+            }
+            throw new Error(`Unexpected publishers index ${name}`);
+          },
+        };
+      }
+      if (table === "publisherMembers") {
+        return {
+          withIndex: (name: string) => {
+            if (name !== "by_publisher_user") {
+              throw new Error(`Unexpected publisherMembers index ${name}`);
+            }
+            return { unique: vi.fn(async () => null) };
+          },
+        };
+      }
+      if (table === "packages" || table === "skills") {
+        return {
+          withIndex: (name: string) => {
+            if (name !== "by_owner_publisher") {
+              throw new Error(`Unexpected ${table} index ${name}`);
+            }
+            return { collect: vi.fn(async () => []) };
+          },
+        };
+      }
+      throw new Error(`Unexpected table ${table}`);
+    }) as never);
+    vi.mocked(requireUser).mockResolvedValue({
+      userId: "users:owner",
+      user: {
+        _id: "users:owner",
+        _creationTime: 1,
+        handle: "openclaw",
+        displayName: "openclaw",
+        name: "openclaw",
+        email: "owner@example.com",
+        role: "user",
+        createdAt: 1,
+        personalPublisherId: "publishers:openclaw-user",
+      },
+    } as never);
+
+    await ensureHandler(ctx);
+
+    expect(patch).toHaveBeenCalledWith("users:owner", {
+      handle: "openclaw-2",
+      displayName: "openclaw-2",
+      updatedAt: expect.any(Number),
+    });
+  });
+
   it("does not auto-claim a reserved handle for another user", async () => {
     const { ctx, patch, query } = makeCtx();
     query.mockImplementation(((table: string) => {
@@ -544,6 +650,19 @@ describe("me", () => {
 
     expect(result).toBeNull();
     expect(get).not.toHaveBeenCalled();
+  });
+
+  it("returns null when auth resolves to an invalid user id", async () => {
+    vi.mocked(getAuthUserId).mockResolvedValue("users:broken" as never);
+    const get = vi.fn(async (id: string) => {
+      if (id === "users:broken") throw new Error("Table mismatch");
+      return null;
+    });
+
+    const result = await meHandler({ db: { get } } as never, {});
+
+    expect(result).toBeNull();
+    expect(get).toHaveBeenCalledWith("users:broken");
   });
 });
 

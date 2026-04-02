@@ -2419,6 +2419,37 @@ describe("httpApiV1 handlers", () => {
     );
   });
 
+  it("packages search falls back to anonymous when cookie auth resolves to an invalid user", async () => {
+    vi.mocked(getAuthUserId).mockResolvedValue("users:broken" as never);
+    const runQuery = vi.fn(async (query: unknown, args: Record<string, unknown>) => {
+      if (query === internal.users.getByIdInternal) {
+        throw new Error("Table mismatch");
+      }
+      if ("query" in args && args.query === "secret") return [];
+      return null;
+    });
+    const runMutation = vi.fn().mockResolvedValue(okRate());
+
+    const response = await __handlers.packagesGetRouterV1Handler(
+      makeCtx({ runQuery, runMutation }),
+      new Request("https://example.com/api/v1/packages/search?q=secret&channel=community"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(runQuery).toHaveBeenCalledWith(
+      internal.users.getByIdInternal,
+      expect.objectContaining({ userId: "users:broken" }),
+    );
+    expect(runQuery).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        query: "secret",
+        channel: "community",
+        viewerUserId: undefined,
+      }),
+    );
+  });
+
   it("packages detail falls back to public skills", async () => {
     const runQuery = vi.fn(async (_query: unknown, args: Record<string, unknown>) => {
       if ("name" in args) return null;

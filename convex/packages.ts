@@ -14,7 +14,12 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
 import { requireGitHubAccountAge } from "./lib/githubAccount";
 import { normalizeGitHubRepository } from "./lib/githubActionsOidc";
-import { assertAdmin, assertModerator, requireUserFromAction } from "./lib/access";
+import {
+  assertAdmin,
+  assertModerator,
+  getOptionalActiveAuthUserId,
+  requireUserFromAction,
+} from "./lib/access";
 import {
   assertPackageVersion,
   ensurePluginNameMatchesPackage,
@@ -494,12 +499,7 @@ function decodePublicPageCursor(raw: string | null | undefined): PublicPageCurso
 }
 
 async function getOptionalViewerUserId(ctx: Parameters<typeof getAuthUserId>[0]) {
-  try {
-    return (await getAuthUserId(ctx)) ?? undefined;
-  } catch {
-    // Public package reads should degrade to anonymous when session resolution fails.
-    return undefined;
-  }
+  return await getOptionalActiveAuthUserId(ctx);
 }
 
 function packageSearchScore(digest: PackageDigestLike, queryText: string) {
@@ -992,7 +992,7 @@ export const list = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const viewerUserId = await getAuthUserId(ctx);
+    const viewerUserId = await getOptionalActiveAuthUserId(ctx);
     if (!viewerUserId) return [];
     const limit = Math.max(1, Math.min(args.limit ?? 50, 100));
     if (args.ownerPublisherId) {

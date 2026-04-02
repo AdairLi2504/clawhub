@@ -1,10 +1,9 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { ActionCtx, MutationCtx } from "./_generated/server";
 import { internalAction, internalMutation, internalQuery, mutation, query } from "./functions";
-import { assertAdmin, assertModerator, requireUser } from "./lib/access";
+import { assertAdmin, assertModerator, getOptionalActiveAuthUserId, requireUser } from "./lib/access";
 import { syncGitHubProfile } from "./lib/githubAccount";
 import {
   ensurePersonalPublisherForUser,
@@ -179,17 +178,9 @@ export const syncGitHubProfileAction = internalAction({
 export const me = query({
   args: {},
   handler: async (ctx) => {
-    let userId: Awaited<ReturnType<typeof getAuthUserId>>;
-    try {
-      userId = await getAuthUserId(ctx);
-    } catch {
-      // Public pages should treat broken/stale auth as anonymous instead of crashing SSR.
-      return null;
-    }
+    const userId = await getOptionalActiveAuthUserId(ctx);
     if (!userId) return null;
-    const user = await ctx.db.get(userId);
-    if (!user || user.deletedAt || user.deactivatedAt) return null;
-    return user;
+    return await ctx.db.get(userId);
   },
 });
 
@@ -248,6 +239,9 @@ async function computeEnsureUpdates(ctx: MutationCtx, user: Doc<"users">) {
   const updates: Record<string, unknown> = {};
 
   const existingHandle = normalizeHandle(user.handle);
+  const existingHandleClaimable = existingHandle
+    ? await canUserClaimHandle(ctx, existingHandle, user._id)
+    : false;
   const githubLogin = normalizeHandle(user.name);
   const requestedHandle = deriveHandle({
     existingHandle,
@@ -258,15 +252,19 @@ async function computeEnsureUpdates(ctx: MutationCtx, user: Doc<"users">) {
     requestedHandle && (await canUserClaimHandle(ctx, requestedHandle, user._id))
       ? requestedHandle
       : undefined;
-  if (!derivedHandle && !existingHandle) {
-    const emailFallback = !requestedHandle && user.email ? user.email.split("@")[0]?.trim() : user.email?.split("@")[0]?.trim();
+  if (!derivedHandle && (!existingHandle || !existingHandleClaimable)) {
+    const emailFallback = normalizeHandle(user.email?.split("@")[0]);
     derivedHandle =
+      (await resolveAvailableHandle(
+        ctx,
+        requestedHandle ?? existingHandle ?? githubLogin ?? emailFallback,
+        user._id,
+      )) ||
       (emailFallback &&
-      emailFallback !== requestedHandle &&
-      (await resolveAvailableHandle(ctx, emailFallback, user._id))) ||
-      (await resolveAvailableHandle(ctx, requestedHandle, user._id));
+        emailFallback !== requestedHandle &&
+        (await resolveAvailableHandle(ctx, emailFallback, user._id)));
   }
-  const baseHandle = derivedHandle ?? existingHandle;
+  const baseHandle = derivedHandle ?? (existingHandleClaimable ? existingHandle : undefined);
 
   if (derivedHandle && existingHandle !== derivedHandle) {
     updates.handle = derivedHandle;

@@ -620,7 +620,9 @@ function makePackageCtx(options: {
     ctx: {
       db: {
         get: vi.fn(async (id: string) => {
-          if (pkg && id === pkg.ownerUserId) return { _id: id, handle: "owner" };
+          if (typeof id === "string" && id.startsWith("users:")) {
+            return { _id: id, handle: id.split(":").pop() ?? "user" };
+          }
           if (ownerPublisher && pkg && id === pkg.ownerPublisherId) return ownerPublisher;
           if (pkg && id === pkg.latestReleaseId) return latestRelease;
           return null;
@@ -1499,6 +1501,26 @@ describe("packages public queries", () => {
     vi.mocked(getAuthUserId).mockRejectedValue(new Error("stale session"));
     const { ctx } = makePackageCtx({
       pkg: makePackageDoc({ channel: "community" }),
+    });
+
+    const detail = await getByNameHandler(ctx, {
+      name: "demo-plugin",
+    });
+
+    expect(detail?.package.name).toBe("demo-plugin");
+  });
+
+  it("treats invalid auth user lookups as anonymous for public package detail", async () => {
+    vi.mocked(getAuthUserId).mockResolvedValue("users:broken" as never);
+    const { ctx } = makePackageCtx({
+      pkg: makePackageDoc({ channel: "community" }),
+    });
+    const get = ctx.db.get as ReturnType<typeof vi.fn>;
+    get.mockImplementation(async (id: string) => {
+      if (id === "users:broken") throw new Error("Table mismatch");
+      if (id === "users:owner") return { _id: id, handle: "owner" };
+      if (id === "packageReleases:demo-1") return makeReleaseDoc();
+      return null;
     });
 
     const detail = await getByNameHandler(ctx, {
@@ -2481,6 +2503,9 @@ describe("packages public queries", () => {
                 llmAnalysis: { status: "clean" },
                 staticScan: { status: "clean" },
               });
+            }
+            if (id === "users:owner") {
+              return { _id: "users:owner", handle: "owner" };
             }
             if (id === "publishers:owner") {
               return { _id: "publishers:owner", kind: "user", linkedUserId: "users:owner" };

@@ -88,7 +88,13 @@ async function getOptionalViewerUserIdForRequest(ctx: ActionCtx, request: Reques
   const apiTokenUserId = await getOptionalApiTokenUserId(ctx, request);
   if (apiTokenUserId) return apiTokenUserId;
   try {
-    return (await getAuthUserId(ctx)) ?? null;
+    const userId = (await getAuthUserId(ctx)) ?? null;
+    if (!userId) return null;
+    const user = await runQueryRef<Doc<"users"> | null>(ctx, internal.users.getByIdInternal, {
+      userId,
+    });
+    if (!user || user.deletedAt || user.deactivatedAt) return null;
+    return userId;
   } catch {
     // Public package reads should degrade to anonymous when cookie-backed auth is stale.
     return null;
