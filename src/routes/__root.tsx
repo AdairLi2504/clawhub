@@ -1,8 +1,10 @@
 import { createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 import { Analytics } from "@vercel/analytics/react";
+import { Toaster } from "sonner";
 import { AppProviders } from "../components/AppProviders";
 import { ClientOnly } from "../components/ClientOnly";
 import { DeploymentDriftBanner } from "../components/DeploymentDriftBanner";
+import { ErrorBoundary } from "../components/ErrorBoundary";
 import { Footer } from "../components/Footer";
 import Header from "../components/Header";
 import { getSiteDescription, getSiteMode, getSiteName, getSiteUrlForMode } from "../lib/site";
@@ -110,9 +112,23 @@ function RootDocument({ children }: { children: React.ReactNode }) {
             <ClientOnly>
               <DeploymentDriftBanner />
             </ClientOnly>
-            {children}
+            <ErrorBoundary>
+              {children}
+            </ErrorBoundary>
             <Footer />
           </div>
+          <Toaster
+            position="bottom-right"
+            toastOptions={{
+              style: {
+                background: "var(--surface)",
+                color: "var(--ink)",
+                border: "1px solid var(--line)",
+                borderRadius: "var(--radius-md)",
+                fontFamily: "var(--font-body)",
+              },
+            }}
+          />
           <ClientOnly>
             <Analytics />
           </ClientOnly>
